@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standat Lottery Admin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <!-- Pemanggilan logo.png diletakkan persis pada tag img di bawah ini -->
+        <div class="brand">
+            <img src="logo.png" alt="Standat Lottery" class="logo">
+            <h2>STANDAT LOTTERY</h2>
+        </div>
+        <ul class="nav">
+            <li onclick="switchTab('live-bet')" class="active" id="nav-live-bet">Live Bet</li>
+            <li onclick="switchTab('transaction-history')" id="nav-transaction-history">Transaction History</li>
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h3>PT STANDAT INDONESIA | Admin Pusat</h3>
+            <div id="clock"></div>
+        </div>
+
+        <!-- Halaman Live Bet -->
+        <div id="live-bet" class="page active">
+            <h2>LIVE BET</h2>
+            <h4 id="active-period-title">PERIOD: Loading...</h4>
+            <div class="table-responsive">
+                <table id="table-live-bet">
+                    <thead>
+                        <tr>
+                            <th>No</th><th>Coupon ID</th><th>Player ID</th><th>Location</th><th>Date</th><th>2D</th><th>3D</th><th>4D</th><th>Total $</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Halaman Transaction History -->
+        <div id="transaction-history" class="page">
+            <h2>TRANSACTION HISTORY</h2>
+            <div class="controls">
+                <select id="filter-period" onchange="renderTransactionHistory()">
+                    <option value="ALL">All Periods</option>
+                </select>
+                <select id="pagination-limit" onchange="renderTransactionHistory()">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="table-responsive">
+                <table id="table-transaction-history">
+                    <thead>
+                        <tr>
+                            <th>No</th><th>Period</th><th>Coupon ID</th><th>Player ID</th><th>Location</th><th>Date</th><th>Time</th><th>2D</th><th>3D</th><th>4D</th><th>Total $</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="10" style="text-align: right;">GRAND TOTAL:</th>
+                            <th id="grand-total">$0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
