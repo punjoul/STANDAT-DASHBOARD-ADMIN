@@ -21,7 +21,7 @@ function switchTab(tabId) {
     if(tabId === 'transaction-history') renderTransactionHistory();
 }
 
-// Fetch Data
+// Fetch Data (Versi Real-time Background)
 async function fetchData() {
     try {
         const response = await fetch(API_URL);
@@ -37,15 +37,22 @@ async function fetchData() {
         // Cari periode aktif (Berdasarkan Kolom E status, Kolom A nama)
         const activeRow = dbPeriods.find(row => row[4] && row[4].toLowerCase() === 'active');
         if(activeRow) {
-            // PERBAIKAN 1: Kolom A "period_name" adalah indeks 0, bukan 1
             activePeriodName = activeRow[0]; 
         }
         
+        // Update dropdown tanpa mengganggu interaksi user
         populateDropdown();
-        renderLiveBet();
+
+        // Update tabel SECARA HALUS, hanya pada tab yang sedang terbuka
+        if (document.getElementById('live-bet').classList.contains('active')) {
+            renderLiveBet();
+        } else if (document.getElementById('transaction-history').classList.contains('active')) {
+            renderTransactionHistory();
+        }
+        
     } catch (error) {
         console.error("Error fetching data: ", error);
-        document.getElementById('active-period-title').innerText = "Gagal memuat data.";
+        document.getElementById('active-period-title').innerText = "Gagal memuat data. Sedang menyambungkan ulang...";
     }
 }
 
@@ -77,25 +84,36 @@ function renderLiveBet() {
     });
 }
 
-// Populate Filter Dropdown
+// Populate Filter Dropdown (Anti-Flicker untuk Real-time)
 function populateDropdown() {
     const select = document.getElementById('filter-period');
-    // Reset dropdown kecuali opsi ALL
-    select.innerHTML = '<option value="ALL">All Periods</option>';
     
-    const uniquePeriods = [...new Set(dbOrders.map(row => row[1]))];
-    uniquePeriods.forEach(p => {
-        if(p) select.innerHTML += `<option value="${p}">${p}</option>`;
-    });
+    // Kumpulkan nama periode yang unik dan hilangkan jika ada yang kosong
+    const uniquePeriods = [...new Set(dbOrders.map(row => row[1]))].filter(p => p);
+    
+    // Cek jumlah opsi saat ini (dikurangi 1 karena ada opsi 'ALL')
+    const currentOptionsCount = select.options.length - 1;
+    
+    // Hanya render ulang HTML dropdown JIKA ada periode baru
+    // Ini mencegah dropdown menutup paksa jika Anda sedang mengkliknya saat auto-refresh berjalan
+    if (uniquePeriods.length !== currentOptionsCount) {
+        const currentFilter = select.value; // Simpan pilihan saat ini
+        select.innerHTML = '<option value="ALL">All Periods</option>';
+        
+        uniquePeriods.forEach(p => {
+            select.innerHTML += `<option value="${p}">${p}</option>`;
+        });
+        
+        // Kembalikan ke pilihan user sebelumnya
+        select.value = currentFilter; 
+    }
 }
 
 // Convert string currency to number for Grand Total
 function parseCurrency(val) {
     if(!val) return 0;
-    // PERBAIKAN 2: Regex sekarang mempertahankan titik (.) dan koma (,)
     let cleaned = val.toString().replace(/[^0-9.,]/g, "");
     
-    // Normalisasi format desimal agar aman dijumlahkan oleh JavaScript
     if (cleaned.includes(',') && cleaned.includes('.')) {
         if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
             cleaned = cleaned.replace(/\./g, '').replace(',', '.');
@@ -120,7 +138,7 @@ function renderTransactionHistory() {
     // Filter by period
     let filteredOrders = filter === 'ALL' ? dbOrders : dbOrders.filter(row => row[1] === filter);
     
-    // Memotong data sesuai jumlah limit pagination agar HANYA menjumlahkan yang tampil di tabel
+    // Memotong data sesuai jumlah limit pagination
     filteredOrders = filteredOrders.slice(0, limit);
     
     let grandTotal = 0;
@@ -129,7 +147,7 @@ function renderTransactionHistory() {
         // Pemetaan kolom: B(1)=Period, C(2)=Coupon, D(3)=Player, E(4)=Date, F(5)=Time, G(6)=Loc, H(7)=2D, I(8)=3D, J(9)=4D, L(11)=Total
         const locLink = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(row[6])}" target="_blank">${row[6]}</a>`;
         
-        // Kalkulasi ke Grand Total
+        // Kalkulasi Grand Total (Hanya dari data yang tampil)
         grandTotal += parseCurrency(row[11]);
 
         tbody.innerHTML += `
@@ -149,9 +167,17 @@ function renderTransactionHistory() {
         `;
     });
 
-    // Update Grand Total (Mengembalikan format dengan koma sebagai desimal)
+    // Update Grand Total
     document.getElementById('grand-total').innerText = '$' + grandTotal.toFixed(2).replace('.', ',');
 }
 
-// Inisialisasi
+// ========================================================
+// INISIALISASI & REAL-TIME AUTO REFRESH (METODE POLLING)
+// ========================================================
+
+// 1. Tarik data pertama kali saat web dibuka
 fetchData();
+
+// 2. Tarik data secara otomatis setiap 15 detik (15000 milidetik)
+// Angka 15 detik sangat aman untuk mencegah limit/kuota harian dari Google Apps Script
+setInterval(fetchData, 15000);
