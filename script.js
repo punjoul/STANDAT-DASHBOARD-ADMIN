@@ -1,5 +1,5 @@
 // GANTI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
-const API_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwTWRORtstLpYkTxqVg_7a18XzVAJH865-PeO7B8V5K7X-z8LyJ6_Dn-zW9Z65HIlxo/exec';
 
 let dbOrders = [];
 let dbPeriods = [];
