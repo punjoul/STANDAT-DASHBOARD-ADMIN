@@ -58,6 +58,14 @@ async function postToScript(paramsObj) {
     return await response.json();
 }
 
+// Helper Link Google Maps untuk Kolom Location
+function formatLocationLink(geo) {
+    const cleanGeo = String(geo || '').trim();
+    if (!cleanGeo || cleanGeo === '-') return '-';
+    const mapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(cleanGeo)}`;
+    return `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="attach-link">${escapeHtml(cleanGeo)}</a>`;
+}
+
 // ==========================================
 // LIVE BET & TRANSACTION HISTORY
 // ==========================================
@@ -99,13 +107,13 @@ function renderLiveBet() {
     tbody.innerHTML = filtered.map((o, idx) => `
         <tr>
             <td>${idx + 1}</td>
-            <td>${o.id_coupon}</td>
-            <td>${o.id_player}</td>
-            <td>${o.geo_location}</td>
-            <td>${o.date_order}</td>
-            <td>${o.order_2d || '-'}</td>
-            <td>${o.order_3d || '-'}</td>
-            <td>${o.order_4d || '-'}</td>
+            <td>${escapeHtml(o.id_coupon)}</td>
+            <td>${escapeHtml(o.id_player)}</td>
+            <td>${formatLocationLink(o.geo_location)}</td>
+            <td>${escapeHtml(o.date_order)}</td>
+            <td>${escapeHtml(o.order_2d || '-')}</td>
+            <td>${escapeHtml(o.order_3d || '-')}</td>
+            <td>${escapeHtml(o.order_4d || '-')}</td>
             <td>$${Number(o.bet_amount).toFixed(2)}</td>
         </tr>
     `).join('');
@@ -117,7 +125,7 @@ function populatePeriodFilter() {
     const uniquePeriods = [...new Set(allOrdersData.map(o => o.period_name))];
 
     select.innerHTML = '<option value="ALL">All Periods</option>' +
-        uniquePeriods.map(p => `<option value="${p}">${p}</option>`).join('');
+        uniquePeriods.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
 
     if (uniquePeriods.includes(currentVal)) select.value = currentVal;
 }
@@ -143,15 +151,15 @@ function renderTransactionHistory() {
     tbody.innerHTML = displayed.map((o, idx) => `
         <tr>
             <td>${idx + 1}</td>
-            <td>${o.period_name}</td>
-            <td>${o.id_coupon}</td>
-            <td>${o.id_player}</td>
-            <td>${o.geo_location}</td>
-            <td>${o.date_order}</td>
-            <td>${o.time_order}</td>
-            <td>${o.order_2d || '-'}</td>
-            <td>${o.order_3d || '-'}</td>
-            <td>${o.order_4d || '-'}</td>
+            <td>${escapeHtml(o.period_name)}</td>
+            <td>${escapeHtml(o.id_coupon)}</td>
+            <td>${escapeHtml(o.id_player)}</td>
+            <td>${formatLocationLink(o.geo_location)}</td>
+            <td>${escapeHtml(o.date_order)}</td>
+            <td>${escapeHtml(o.time_order)}</td>
+            <td>${escapeHtml(o.order_2d || '-')}</td>
+            <td>${escapeHtml(o.order_3d || '-')}</td>
+            <td>${escapeHtml(o.order_4d || '-')}</td>
             <td>$${Number(o.bet_amount).toFixed(2)}</td>
         </tr>
     `).join('');
@@ -167,7 +175,7 @@ async function loadRegistrationTable() {
     try {
         const res = await postToScript({ action: 'get_players' });
         if (res.status !== 'success') {
-            tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:red;">${res.message || 'Gagal memuat data'}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:red;">${escapeHtml(res.message || 'Gagal memuat data')}</td></tr>`;
             return;
         }
 
@@ -256,7 +264,7 @@ async function loadPeriodTable() {
     try {
         const res = await postToScript({ action: 'get_all_periods' });
         if (res.status !== 'success') {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">${res.message || 'Gagal memuat data'}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">${escapeHtml(res.message || 'Gagal memuat data')}</td></tr>`;
             return;
         }
 
@@ -368,7 +376,7 @@ async function loadReportTable() {
     try {
         const res = await postToScript({ action: 'get_report' });
         if (res.status !== 'success') {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:red;">${res.message || 'Gagal memuat report'}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:red;">${escapeHtml(res.message || 'Gagal memuat report')}</td></tr>`;
             return;
         }
 
