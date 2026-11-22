@@ -1,183 +1,434 @@
-// GANTI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
-const API_URL = 'https://script.google.com/macros/s/AKfycbwTWRORtstLpYkTxqVg_7a18XzVAJH865-PeO7B8V5K7X-z8LyJ6_Dn-zW9Z65HIlxo/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx17A57khXP7ubD4xBlXoZ-EN1Wi2hUX5pVBxWu7tY25CQ6z_BXXLpgXOLk3hHM-UAnWw/exec';
 
-let dbOrders = [];
-let dbPeriods = [];
-let activePeriodName = "";
+let allOrdersData = [];
+let activePeriodName = '';
+let playersData = [];
 
-// Realtime Clock
-setInterval(() => {
-    document.getElementById('clock').innerText = new Date().toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'medium' });
-}, 1000);
+// ==========================================
+// INISIALISASI & JAM REAL-TIME
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    startClock();
+    loadLiveBetAndHistory();
+});
 
-// Tab Switcher
+function startClock() {
+    const clockEl = document.getElementById('clock');
+    const update = () => {
+        const now = new Date();
+        clockEl.textContent = now.toLocaleString('id-ID', {
+            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    };
+    update();
+    setInterval(update, 1000);
+}
+
+// ==========================================
+// NAVIGASI TAB
+// ==========================================
 function switchTab(tabId) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav li').forEach(l => l.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-    document.getElementById('nav-' + tabId).classList.add('active');
-    
-    if(tabId === 'live-bet') renderLiveBet();
-    if(tabId === 'transaction-history') renderTransactionHistory();
+    document.querySelectorAll('.nav li').forEach(li => li.classList.remove('active'));
+
+    const targetPage = document.getElementById(tabId);
+    const targetNav = document.getElementById('nav-' + tabId);
+    if (targetPage) targetPage.classList.add('active');
+    if (targetNav) targetNav.classList.add('active');
+
+    if (tabId === 'live-bet' || tabId === 'transaction-history') {
+        loadLiveBetAndHistory();
+    } else if (tabId === 'registration') {
+        loadRegistrationTable();
+    } else if (tabId === 'period') {
+        loadPeriodTable();
+    } else if (tabId === 'report') {
+        loadReportTable();
+    }
 }
 
-// Fetch Data (Versi Real-time Background)
-async function fetchData() {
+// Helper POST ke Google Apps Script
+async function postToScript(paramsObj) {
+    const body = new URLSearchParams(paramsObj);
+    const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: body
+    });
+    return await response.json();
+}
+
+// ==========================================
+// LIVE BET & TRANSACTION HISTORY
+// ==========================================
+async function loadLiveBetAndHistory() {
     try {
-        const response = await fetch(API_URL);
-        const data = await response.json();
-        
-        // Memisahkan header dan membalik baris agar data terbawah di database muncul teratas
-        const orderHeaders = data.orders.shift();
-        dbOrders = data.orders.reverse(); 
-        
-        const periodHeaders = data.periods.shift();
-        dbPeriods = data.periods;
+        const [periodRes, orderRes] = await Promise.all([
+            postToScript({ action: 'get_period' }),
+            postToScript({ action: 'get_admin_orders' })
+        ]);
 
-        // Cari periode aktif (Berdasarkan Kolom E status, Kolom A nama)
-        const activeRow = dbPeriods.find(row => row[4] && row[4].toLowerCase() === 'active');
-        if(activeRow) {
-            activePeriodName = activeRow[0]; 
+        if (periodRes.status === 'success' && periodRes.period) {
+            activePeriodName = periodRes.period.name;
+            document.getElementById('active-period-title').textContent =
+                `PERIOD: ${periodRes.period.name} (${periodRes.period.date})`;
+        } else {
+            document.getElementById('active-period-title').textContent = 'PERIOD: Tidak ada periode aktif';
         }
-        
-        // Update dropdown tanpa mengganggu interaksi user
-        populateDropdown();
 
-        // Update tabel SECARA HALUS, hanya pada tab yang sedang terbuka
-        if (document.getElementById('live-bet').classList.contains('active')) {
+        if (orderRes.status === 'success') {
+            allOrdersData = orderRes.data || [];
+            populatePeriodFilter();
             renderLiveBet();
-        } else if (document.getElementById('transaction-history').classList.contains('active')) {
             renderTransactionHistory();
         }
-        
-    } catch (error) {
-        console.error("Error fetching data: ", error);
-        document.getElementById('active-period-title').innerText = "Gagal memuat data. Sedang menyambungkan ulang...";
+    } catch (err) {
+        console.error('Gagal memuat data order:', err);
     }
 }
 
-// Render Live Bet
 function renderLiveBet() {
-    document.getElementById('active-period-title').innerText = `PERIOD: ${activePeriodName || 'Tidak ada periode aktif'}`;
     const tbody = document.querySelector('#table-live-bet tbody');
-    tbody.innerHTML = '';
+    const filtered = allOrdersData.filter(o => o.period_name === activePeriodName);
 
-    // Filter order hanya untuk periode aktif
-    const liveOrders = dbOrders.filter(row => row[1] === activePeriodName);
-    
-    liveOrders.forEach((row, index) => {
-        // Pemetaan kolom: C(2)=Coupon, D(3)=Player, E(4)=Date, G(6)=Loc, H(7)=2D, I(8)=3D, J(9)=4D, L(11)=Total
-        const locLink = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(row[6])}" target="_blank">${row[6]}</a>`;
-        tbody.innerHTML += `
-            <tr>
-                <td>${index + 1}</td>
-                <td>${row[2]}</td>
-                <td>${row[3]}</td>
-                <td>${locLink}</td>
-                <td>${row[4]}</td>
-                <td>${row[7]}</td>
-                <td>${row[8]}</td>
-                <td>${row[9]}</td>
-                <td>${row[11]}</td>
-            </tr>
-        `;
-    });
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Belum ada taruhan pada periode aktif.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map((o, idx) => `
+        <tr>
+            <td>${idx + 1}</td>
+            <td>${o.id_coupon}</td>
+            <td>${o.id_player}</td>
+            <td>${o.geo_location}</td>
+            <td>${o.date_order}</td>
+            <td>${o.order_2d || '-'}</td>
+            <td>${o.order_3d || '-'}</td>
+            <td>${o.order_4d || '-'}</td>
+            <td>$${Number(o.bet_amount).toFixed(2)}</td>
+        </tr>
+    `).join('');
 }
 
-// Populate Filter Dropdown (Anti-Flicker untuk Real-time)
-function populateDropdown() {
+function populatePeriodFilter() {
     const select = document.getElementById('filter-period');
-    
-    // Kumpulkan nama periode yang unik dan hilangkan jika ada yang kosong
-    const uniquePeriods = [...new Set(dbOrders.map(row => row[1]))].filter(p => p);
-    
-    // Cek jumlah opsi saat ini (dikurangi 1 karena ada opsi 'ALL')
-    const currentOptionsCount = select.options.length - 1;
-    
-    // Hanya render ulang HTML dropdown JIKA ada periode baru
-    // Ini mencegah dropdown menutup paksa jika Anda sedang mengkliknya saat auto-refresh berjalan
-    if (uniquePeriods.length !== currentOptionsCount) {
-        const currentFilter = select.value; // Simpan pilihan saat ini
-        select.innerHTML = '<option value="ALL">All Periods</option>';
-        
-        uniquePeriods.forEach(p => {
-            select.innerHTML += `<option value="${p}">${p}</option>`;
-        });
-        
-        // Kembalikan ke pilihan user sebelumnya
-        select.value = currentFilter; 
-    }
+    const currentVal = select.value;
+    const uniquePeriods = [...new Set(allOrdersData.map(o => o.period_name))];
+
+    select.innerHTML = '<option value="ALL">All Periods</option>' +
+        uniquePeriods.map(p => `<option value="${p}">${p}</option>`).join('');
+
+    if (uniquePeriods.includes(currentVal)) select.value = currentVal;
 }
 
-// Convert string currency to number for Grand Total
-function parseCurrency(val) {
-    if(!val) return 0;
-    let cleaned = val.toString().replace(/[^0-9.,]/g, "");
-    
-    if (cleaned.includes(',') && cleaned.includes('.')) {
-        if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
-            cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-        } else {
-            cleaned = cleaned.replace(/,/g, '');
-        }
-    } else {
-        cleaned = cleaned.replace(',', '.');
-    }
-    
-    return parseFloat(cleaned) || 0;
-}
-
-// Render Transaction History
 function renderTransactionHistory() {
     const tbody = document.querySelector('#table-transaction-history tbody');
-    tbody.innerHTML = '';
-    
-    const filter = document.getElementById('filter-period').value;
-    const limit = parseInt(document.getElementById('pagination-limit').value);
-    
-    // Filter by period
-    let filteredOrders = filter === 'ALL' ? dbOrders : dbOrders.filter(row => row[1] === filter);
-    
-    // Memotong data sesuai jumlah limit pagination
-    filteredOrders = filteredOrders.slice(0, limit);
-    
-    let grandTotal = 0;
+    const periodFilter = document.getElementById('filter-period').value;
+    const limit = parseInt(document.getElementById('pagination-limit').value, 10) || 10;
 
-    filteredOrders.forEach((row, index) => {
-        // Pemetaan kolom: B(1)=Period, C(2)=Coupon, D(3)=Player, E(4)=Date, F(5)=Time, G(6)=Loc, H(7)=2D, I(8)=3D, J(9)=4D, L(11)=Total
-        const locLink = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(row[6])}" target="_blank">${row[6]}</a>`;
-        
-        // Kalkulasi Grand Total (Hanya dari data yang tampil)
-        grandTotal += parseCurrency(row[11]);
+    let filtered = periodFilter === 'ALL'
+        ? allOrdersData
+        : allOrdersData.filter(o => o.period_name === periodFilter);
 
-        tbody.innerHTML += `
-            <tr>
-                <td>${index + 1}</td>
-                <td>${row[1]}</td>
-                <td>${row[2]}</td>
-                <td>${row[3]}</td>
-                <td>${locLink}</td>
-                <td>${row[4]}</td>
-                <td>${row[5]}</td>
-                <td>${row[7]}</td>
-                <td>${row[8]}</td>
-                <td>${row[9]}</td>
-                <td>${row[11]}</td>
-            </tr>
-        `;
-    });
+    const grandTotal = filtered.reduce((sum, o) => sum + Number(o.bet_amount || 0), 0);
+    document.getElementById('grand-total').textContent = `$${grandTotal.toFixed(2)}`;
 
-    // Update Grand Total
-    document.getElementById('grand-total').innerText = '$' + grandTotal.toFixed(2).replace('.', ',');
+    const displayed = filtered.slice(0, limit);
+    if (displayed.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;">Tidak ada data transaksi.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = displayed.map((o, idx) => `
+        <tr>
+            <td>${idx + 1}</td>
+            <td>${o.period_name}</td>
+            <td>${o.id_coupon}</td>
+            <td>${o.id_player}</td>
+            <td>${o.geo_location}</td>
+            <td>${o.date_order}</td>
+            <td>${o.time_order}</td>
+            <td>${o.order_2d || '-'}</td>
+            <td>${o.order_3d || '-'}</td>
+            <td>${o.order_4d || '-'}</td>
+            <td>$${Number(o.bet_amount).toFixed(2)}</td>
+        </tr>
+    `).join('');
 }
 
-// ========================================================
-// INISIALISASI & REAL-TIME AUTO REFRESH (METODE POLLING)
-// ========================================================
+// ==========================================
+// MENU 1: REGISTRATION (Sheet PLAYER Kolom B - L)
+// ==========================================
+async function loadRegistrationTable() {
+    const tbody = document.querySelector('#table-registration tbody');
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;">Loading data...</td></tr>';
 
-// 1. Tarik data pertama kali saat web dibuka
-fetchData();
+    try {
+        const res = await postToScript({ action: 'get_players' });
+        if (res.status !== 'success') {
+            tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:red;">${res.message || 'Gagal memuat data'}</td></tr>`;
+            return;
+        }
 
-// 2. Tarik data secara otomatis setiap 15 detik (15000 milidetik)
-// Angka 15 detik sangat aman untuk mencegah limit/kuota harian dari Google Apps Script
-setInterval(fetchData, 15000);
+        playersData = res.data || [];
+        if (playersData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;">Belum ada data pemain.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = playersData.map((p, idx) => `
+            <tr class="clickable-row" onclick="openEditPlayerModal(${idx})">
+                <td>${escapeHtml(p.name_of_player)}</td>
+                <td>${escapeHtml(p.place_of_birth)}</td>
+                <td>${escapeHtml(p.date_of_birth)}</td>
+                <td>${escapeHtml(p.no_id_card)}</td>
+                <td>${escapeHtml(p.address)}</td>
+                <td>${escapeHtml(p.city_district)}</td>
+                <td>${escapeHtml(p.phone_no)}</td>
+                <td><span class="badge badge-level">${escapeHtml(p.player_level)}</span></td>
+                <td><span class="badge badge-${p.player_status.toLowerCase()}">${escapeHtml(p.player_status)}</span></td>
+                <td>${formatAttachmentLink(p.attachment1_player, 'Buka File 1')}</td>
+                <td>${formatAttachmentLink(p.attachment2_player, 'Buka File 2')}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:red;">Terjadi kesalahan koneksi.</td></tr>';
+        console.error(err);
+    }
+}
+
+function formatAttachmentLink(url, label) {
+    if (url && /^https?:\/\//i.test(url)) {
+        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="attach-link" onclick="event.stopPropagation()">${label}</a>`;
+    }
+    return `<span class="text-muted">${escapeHtml(url || '-')}</span>`;
+}
+
+function openEditPlayerModal(index) {
+    const player = playersData[index];
+    if (!player) return;
+
+    document.getElementById('edit-id-player').value = player.id_player;
+    document.getElementById('edit-name-player').value = player.name_of_player;
+    document.getElementById('edit-player-level').value = player.player_level || 'Normal';
+    document.getElementById('edit-player-status').value = player.player_status || 'Registered';
+
+    document.getElementById('modal-edit-player').style.display = 'flex';
+}
+
+async function submitEditPlayer(event) {
+    event.preventDefault();
+    const btn = document.getElementById('btn-save-player');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+        const res = await postToScript({
+            action: 'update_player',
+            id_player: document.getElementById('edit-id-player').value,
+            player_level: document.getElementById('edit-player-level').value,
+            player_status: document.getElementById('edit-player-status').value
+        });
+
+        if (res.status === 'success') {
+            closeModal('modal-edit-player');
+            loadRegistrationTable();
+        } else {
+            alert('Gagal menyimpan: ' + (res.message || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Terjadi kesalahan saat menyimpan data.');
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+    }
+}
+
+// ==========================================
+// MENU 2: PERIOD (Sheet PERIOD Kolom A - E)
+// ==========================================
+async function loadPeriodTable() {
+    const tbody = document.querySelector('#table-period tbody');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Loading data...</td></tr>';
+
+    try {
+        const res = await postToScript({ action: 'get_all_periods' });
+        if (res.status !== 'success') {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">${res.message || 'Gagal memuat data'}</td></tr>`;
+            return;
+        }
+
+        const periods = res.data || [];
+        if (periods.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Belum ada data periode.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = periods.map(p => `
+            <tr>
+                <td>${escapeHtml(p.period_name)}</td>
+                <td>${escapeHtml(p.period_date)}</td>
+                <td>${escapeHtml(p.period_start)}</td>
+                <td>${escapeHtml(p.period_end)}</td>
+                <td><span class="badge badge-${p.period_status.toLowerCase()}">${escapeHtml(p.period_status)}</span></td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:red;">Terjadi kesalahan koneksi.</td></tr>';
+        console.error(err);
+    }
+}
+
+function openAddPeriodModal() {
+    document.getElementById('form-add-period').reset();
+    document.getElementById('input-period-start').value = '13:00:00';
+    document.getElementById('input-period-end').value = '18:00:00';
+    document.getElementById('input-period-status').value = '';
+    document.getElementById('modal-add-period').style.display = 'flex';
+}
+
+function updateAutoPeriodStatus() {
+    const dateVal = document.getElementById('input-period-date').value; // YYYY-MM-DD
+    let startVal = document.getElementById('input-period-start').value; // HH:mm atau HH:mm:ss
+    let endVal = document.getElementById('input-period-end').value;
+
+    if (!dateVal) {
+        document.getElementById('input-period-status').value = '';
+        return;
+    }
+
+    if (startVal && startVal.length === 5) startVal += ':00';
+    if (endVal && endVal.length === 5) endVal += ':00';
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    let status = 'inactive';
+    if (dateVal > todayStr) {
+        status = 'queue';
+    } else if (dateVal < todayStr) {
+        status = 'inactive';
+    } else {
+        // Tanggal sama dengan hari ini: cek rentang jam
+        if (startVal && nowTimeStr < startVal) {
+            status = 'queue';
+        } else if (startVal && endVal && nowTimeStr >= startVal && nowTimeStr <= endVal) {
+            status = 'active';
+        } else {
+            status = 'inactive';
+        }
+    }
+
+    document.getElementById('input-period-status').value = status;
+}
+
+async function submitAddPeriod(event) {
+    event.preventDefault();
+    updateAutoPeriodStatus();
+
+    const btn = document.getElementById('btn-save-period');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+        const res = await postToScript({
+            action: 'add_period',
+            period_name: document.getElementById('input-period-name').value.trim(),
+            period_date: document.getElementById('input-period-date').value,
+            period_start: document.getElementById('input-period-start').value,
+            period_end: document.getElementById('input-period-end').value,
+            period_status: document.getElementById('input-period-status').value
+        });
+
+        if (res.status === 'success') {
+            closeModal('modal-add-period');
+            loadPeriodTable();
+        } else {
+            alert('Gagal menambah periode: ' + (res.message || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Terjadi kesalahan saat menyimpan periode.');
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Period';
+    }
+}
+
+// ==========================================
+// MENU 3: REPORT (Agregasi Sheet ORDER)
+// ==========================================
+async function loadReportTable() {
+    const tbody = document.querySelector('#table-report tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading data...</td></tr>';
+
+    try {
+        const res = await postToScript({ action: 'get_report' });
+        if (res.status !== 'success') {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:red;">${res.message || 'Gagal memuat report'}</td></tr>`;
+            return;
+        }
+
+        const rows = res.data || [];
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Belum ada data order.</td></tr>';
+            return;
+        }
+
+        let grand2d = 0, grand3d = 0, grand4d = 0, grandSales = 0, grandTax = 0;
+
+        tbody.innerHTML = rows.map(r => {
+            grand2d += r.total_2d;
+            grand3d += r.total_3d;
+            grand4d += r.total_4d;
+            grandSales += r.total_sales;
+            grandTax += r.tax_10;
+
+            return `
+                <tr>
+                    <td>${escapeHtml(r.period_name)}</td>
+                    <td>${escapeHtml(r.date_order)}</td>
+                    <td>$${r.total_2d.toFixed(2)}</td>
+                    <td>$${r.total_3d.toFixed(2)}</td>
+                    <td>$${r.total_4d.toFixed(2)}</td>
+                    <td><strong>$${r.total_sales.toFixed(2)}</strong></td>
+                    <td>$${r.tax_10.toFixed(2)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        document.getElementById('report-grand-2d').textContent = `$${grand2d.toFixed(2)}`;
+        document.getElementById('report-grand-3d').textContent = `$${grand3d.toFixed(2)}`;
+        document.getElementById('report-grand-4d').textContent = `$${grand4d.toFixed(2)}`;
+        document.getElementById('report-grand-sales').textContent = `$${grandSales.toFixed(2)}`;
+        document.getElementById('report-grand-tax').textContent = `$${grandTax.toFixed(2)}`;
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:red;">Terjadi kesalahan koneksi.</td></tr>';
+        console.error(err);
+    }
+}
+
+// ==========================================
+// UTILITY MODAL & ESCAPE HTML
+// ==========================================
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+window.onclick = function (event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+};
+
+function escapeHtml(text) {
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
