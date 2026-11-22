@@ -78,16 +78,56 @@
             </div>
         </div>
 
-        <!-- Halaman Registration -->
+        <!-- Halaman Registration (Sheet PLAYER Kolom B s.d. L) -->
         <div id="registration" class="page">
-            <h2>Registration</h2>
-            <p>This page is still under development</p>
+            <h2>REGISTRATION</h2>
+            <p class="helper-text">Klik baris pemain untuk mengubah <strong>Player Level</strong> atau <strong>Player Status</strong>.</p>
+            <div class="table-responsive">
+                <table id="table-registration">
+                    <thead>
+                        <tr>
+                            <th>Name of Player</th>
+                            <th>Place of Birth</th>
+                            <th>Date of Birth</th>
+                            <th>No ID Card</th>
+                            <th>Address</th>
+                            <th>City / District</th>
+                            <th>Phone No</th>
+                            <th>Player Level</th>
+                            <th>Player Status</th>
+                            <th>Attachment 1</th>
+                            <th>Attachment 2</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="11" style="text-align:center;">Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <!-- Halaman Period -->
+        <!-- Halaman Period (Sheet PERIOD Kolom A s.d. E) -->
         <div id="period" class="page">
-            <h2>Period</h2>
-            <p>This page is still under development</p>
+            <div class="page-header-bar">
+                <h2>PERIOD</h2>
+                <button class="btn-primary" onclick="openAddPeriodModal()">+ ADD PERIOD</button>
+            </div>
+            <div class="table-responsive">
+                <table id="table-period">
+                    <thead>
+                        <tr>
+                            <th>Period Name</th>
+                            <th>Period Date</th>
+                            <th>Period Start</th>
+                            <th>Period End</th>
+                            <th>Period Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="5" style="text-align:center;">Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Halaman Result -->
@@ -102,12 +142,112 @@
             <p>This page is still under development</p>
         </div>
 
-        <!-- Halaman Report -->
+        <!-- Halaman Report (Agregasi Sheet ORDER) -->
         <div id="report" class="page">
             <h2>REPORT</h2>
-            <p>This page is still under development</p>
+            <div class="table-responsive">
+                <table id="table-report">
+                    <thead>
+                        <tr>
+                            <th>Period Name</th>
+                            <th>Date Order</th>
+                            <th>2D Total</th>
+                            <th>3D Total</th>
+                            <th>4D Total</th>
+                            <th>Total Sales</th>
+                            <th>Tax 10%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="7" style="text-align:center;">Loading data...</td></tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="2" style="text-align: right;">GRAND TOTAL:</th>
+                            <th id="report-grand-2d">$0.00</th>
+                            <th id="report-grand-3d">$0.00</th>
+                            <th id="report-grand-4d">$0.00</th>
+                            <th id="report-grand-sales">$0.00</th>
+                            <th id="report-grand-tax">$0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         </div>
     </div>
+
+    <!-- MODAL EDIT REGISTRATION (PLAYER) -->
+    <div id="modal-edit-player" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Player</h3>
+                <span class="modal-close" onclick="closeModal('modal-edit-player')">&times;</span>
+            </div>
+            <form id="form-edit-player" onsubmit="submitEditPlayer(event)">
+                <input type="hidden" id="edit-id-player">
+                <div class="form-group">
+                    <label>Name of Player</label>
+                    <input type="text" id="edit-name-player" readonly class="input-readonly">
+                </div>
+                <div class="form-group">
+                    <label for="edit-player-level">Player Level</label>
+                    <select id="edit-player-level" required>
+                        <option value="Normal">Normal</option>
+                        <option value="Agen">Agen</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-player-status">Player Status</label>
+                    <select id="edit-player-status" required>
+                        <option value="Registered">Registered</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Active">Active</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeModal('modal-edit-player')">Cancel</button>
+                    <button type="submit" class="btn-primary" id="btn-save-player">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL ADD PERIOD -->
+    <div id="modal-add-period" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Period</h3>
+                <span class="modal-close" onclick="closeModal('modal-add-period')">&times;</span>
+            </div>
+            <form id="form-add-period" onsubmit="submitAddPeriod(event)">
+                <div class="form-group">
+                    <label for="input-period-name">Period Name</label>
+                    <input type="text" id="input-period-name" placeholder="Contoh: SGP-251126" required>
+                </div>
+                <div class="form-group">
+                    <label for="input-period-date">Period Date</label>
+                    <input type="date" id="input-period-date" required onchange="updateAutoPeriodStatus()">
+                </div>
+                <div class="form-group">
+                    <label for="input-period-start">Period Start</label>
+                    <input type="time" id="input-period-start" step="1" value="13:00:00" required onchange="updateAutoPeriodStatus()">
+                </div>
+                <div class="form-group">
+                    <label for="input-period-end">Period End</label>
+                    <input type="time" id="input-period-end" step="1" value="18:00:00" required onchange="updateAutoPeriodStatus()">
+                </div>
+                <div class="form-group">
+                    <label for="input-period-status">Period Status (Auto Generated)</label>
+                    <input type="text" id="input-period-status" readonly class="input-readonly" placeholder="Otomatis terisi sesuai tanggal & jam">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeModal('modal-add-period')">Cancel</button>
+                    <button type="submit" class="btn-primary" id="btn-save-period">Save Period</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
