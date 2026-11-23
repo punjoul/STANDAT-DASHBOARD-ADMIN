@@ -470,6 +470,7 @@ function renderTransactionTable() {
         const statusLower = String(t.transaction_status || '').toLowerCase();
         return `
             <tr class="clickable-row" onclick="openEditTransactionModal(${globalIdx})">
+                <td><span class="badge badge-${escapeHtml(statusLower)}">${escapeHtml(t.transaction_status)}</span></td>
                 <td>${escapeHtml(t.id_player)}</td>
                 <td>${escapeHtml(t.player_name)}</td>
                 <td>${escapeHtml(t.date_transaction)}</td>
@@ -479,7 +480,6 @@ function renderTransactionTable() {
                 <td>${escapeHtml(t.bank_name || '-')}</td>
                 <td>${escapeHtml(t.account_number || '-')}</td>
                 <td>${escapeHtml(t.name_in_bank_account || '-')}</td>
-                <td><span class="badge badge-${escapeHtml(statusLower)}">${escapeHtml(t.transaction_status)}</span></td>
             </tr>
         `;
     }).join('');
