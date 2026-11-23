@@ -3,6 +3,8 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx17A57khXP7ubD4xBlX
 let allOrdersData = [];
 let activePeriodName = '';
 let playersData = [];
+let transactionsData = [];
+let txCurrentPage = 1;
 
 // ==========================================
 // INISIALISASI & JAM REAL-TIME
@@ -43,6 +45,8 @@ function switchTab(tabId) {
         loadRegistrationTable();
     } else if (tabId === 'period') {
         loadPeriodTable();
+    } else if (tabId === 'transaction') {
+        loadTransactionTable();
     } else if (tabId === 'report') {
         loadReportTable();
     }
@@ -298,8 +302,8 @@ function openAddPeriodModal() {
 }
 
 function updateAutoPeriodStatus() {
-    const dateVal = document.getElementById('input-period-date').value; // YYYY-MM-DD
-    let startVal = document.getElementById('input-period-start').value; // HH:mm atau HH:mm:ss
+    const dateVal = document.getElementById('input-period-date').value;
+    let startVal = document.getElementById('input-period-start').value;
     let endVal = document.getElementById('input-period-end').value;
 
     if (!dateVal) {
@@ -320,7 +324,6 @@ function updateAutoPeriodStatus() {
     } else if (dateVal < todayStr) {
         status = 'inactive';
     } else {
-        // Tanggal sama dengan hari ini: cek rentang jam
         if (startVal && nowTimeStr < startVal) {
             status = 'queue';
         } else if (startVal && endVal && nowTimeStr >= startVal && nowTimeStr <= endVal) {
@@ -367,7 +370,138 @@ async function submitAddPeriod(event) {
 }
 
 // ==========================================
-// MENU 3: REPORT (Agregasi Sheet ORDER)
+// MENU 3: TRANSACTION (Sheet ACTIVITY + PLAYER + ACCOUNT)
+// ==========================================
+async function loadTransactionTable() {
+    const tbody = document.querySelector('#table-transaction tbody');
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Loading data...</td></tr>';
+
+    try {
+        const res = await postToScript({ action: 'get_transactions' });
+        if (res.status !== 'success') {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:red;">${escapeHtml(res.message || 'Gagal memuat data transaksi')}</td></tr>`;
+            return;
+        }
+
+        transactionsData = res.data || [];
+        txCurrentPage = 1;
+        renderTransactionTable();
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:red;">Terjadi kesalahan koneksi.</td></tr>';
+        console.error(err);
+    }
+}
+
+function onTxLimitChange() {
+    txCurrentPage = 1;
+    renderTransactionTable();
+}
+
+function changeTxPage(delta) {
+    const limit = parseInt(document.getElementById('tx-pagination-limit').value, 10) || 10;
+    const totalPages = Math.max(1, Math.ceil(transactionsData.length / limit));
+    const nextPage = txCurrentPage + delta;
+    if (nextPage >= 1 && nextPage <= totalPages) {
+        txCurrentPage = nextPage;
+        renderTransactionTable();
+    }
+}
+
+function renderTransactionTable() {
+    const tbody = document.querySelector('#table-transaction tbody');
+    const limit = parseInt(document.getElementById('tx-pagination-limit').value, 10) || 10;
+    const totalItems = transactionsData.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+
+    if (txCurrentPage > totalPages) txCurrentPage = totalPages;
+    if (txCurrentPage < 1) txCurrentPage = 1;
+
+    const startIdx = (txCurrentPage - 1) * limit;
+    const pageItems = transactionsData.slice(startIdx, startIdx + limit);
+
+    document.getElementById('tx-page-info').textContent =
+        `Page ${txCurrentPage} of ${totalPages} (Total: ${totalItems} data)`;
+    document.getElementById('btn-tx-prev').disabled = txCurrentPage <= 1;
+    document.getElementById('btn-tx-next').disabled = txCurrentPage >= totalPages;
+
+    if (pageItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Belum ada data transaksi.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = pageItems.map((t, idx) => {
+        const globalIdx = startIdx + idx;
+        const statusLower = String(t.transaction_status || '').toLowerCase();
+        return `
+            <tr class="clickable-row" onclick="openEditTransactionModal(${globalIdx})">
+                <td>${escapeHtml(t.id_player)}</td>
+                <td>${escapeHtml(t.player_name)}</td>
+                <td>${escapeHtml(t.date_transaction)}</td>
+                <td>${escapeHtml(t.activity)}</td>
+                <td>${escapeHtml(t.method)}</td>
+                <td>$${Number(t.transaction_amount).toFixed(2)}</td>
+                <td>${escapeHtml(t.bank_name || '-')}</td>
+                <td>${escapeHtml(t.account_number || '-')}</td>
+                <td>${escapeHtml(t.name_in_bank_account || '-')}</td>
+                <td><span class="badge badge-${escapeHtml(statusLower)}">${escapeHtml(t.transaction_status)}</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function openEditTransactionModal(globalIndex) {
+    const tx = transactionsData[globalIndex];
+    if (!tx) return;
+
+    document.getElementById('tx-id-transaction').value = tx.id_transaction;
+    document.getElementById('tx-row-index').value = tx.row_index;
+    document.getElementById('tx-id-player').value = tx.id_player;
+    document.getElementById('tx-player-name').value = tx.player_name;
+    document.getElementById('tx-request-date').value = tx.date_transaction;
+    document.getElementById('tx-activity').value = tx.activity;
+    document.getElementById('tx-method').value = tx.method;
+    document.getElementById('tx-amount').value = `$${Number(tx.transaction_amount).toFixed(2)}`;
+    document.getElementById('tx-bank-name').value = tx.bank_name || '-';
+    document.getElementById('tx-account-number').value = tx.account_number || '-';
+    document.getElementById('tx-name-in-bank').value = tx.name_in_bank_account || '-';
+
+    const currentStatus = String(tx.transaction_status || 'waiting').toLowerCase();
+    document.getElementById('tx-status').value = currentStatus === 'approve' ? 'approve' : 'waiting';
+
+    document.getElementById('modal-edit-transaction').style.display = 'flex';
+}
+
+async function submitEditTransaction(event) {
+    event.preventDefault();
+    const btn = document.getElementById('btn-save-transaction');
+    btn.disabled = true;
+    btn.textContent = 'Menyimpan...';
+
+    try {
+        const res = await postToScript({
+            action: 'update_transaction',
+            id_transaction: document.getElementById('tx-id-transaction').value,
+            row_index: document.getElementById('tx-row-index').value,
+            transaction_status: document.getElementById('tx-status').value
+        });
+
+        if (res.status === 'success') {
+            closeModal('modal-edit-transaction');
+            loadTransactionTable();
+        } else {
+            alert('Gagal menyimpan: ' + (res.message || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Terjadi kesalahan saat menyimpan transaksi.');
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'SIMPAN';
+    }
+}
+
+// ==========================================
+// MENU 4: REPORT (Agregasi Sheet ORDER)
 // ==========================================
 async function loadReportTable() {
     const tbody = document.querySelector('#table-report tbody');
