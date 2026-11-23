@@ -7,24 +7,55 @@ let transactionsData = [];
 let txCurrentPage = 1;
 
 // ==========================================
-// INISIALISASI & JAM REAL-TIME
+// INISIALISASI, JAM GMT+9 & AUTO-REFRESH PERIOD
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     startClock();
     loadLiveBetAndHistory();
+    startPeriodAutoRefresh();
 });
+
+// Helper: Ambil tanggal & jam sekarang persis di GMT+9 (Timor Leste)
+function getNowGMT9() {
+    const gmt9 = new Date(Date.now() + 9 * 3600000);
+    const yyyy = gmt9.getUTCFullYear();
+    const mm = String(gmt9.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(gmt9.getUTCDate()).padStart(2, '0');
+    const hh = String(gmt9.getUTCHours()).padStart(2, '0');
+    const min = String(gmt9.getUTCMinutes()).padStart(2, '0');
+    const ss = String(gmt9.getUTCSeconds()).padStart(2, '0');
+    return {
+        dateStr: `${yyyy}-${mm}-${dd}`,
+        timeStr: `${hh}:${min}:${ss}`
+    };
+}
 
 function startClock() {
     const clockEl = document.getElementById('clock');
     const update = () => {
         const now = new Date();
         clockEl.textContent = now.toLocaleString('id-ID', {
+            timeZone: 'Asia/Dili',
             weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
             hour: '2-digit', minute: '2-digit', second: '2-digit'
-        });
+        }) + ' (GMT+9)';
     };
     update();
     setInterval(update, 1000);
+}
+
+// Refresh otomatis setiap 60 detik agar perubahan status Period langsung terlihat
+function startPeriodAutoRefresh() {
+    setInterval(() => {
+        const periodPage = document.getElementById('period');
+        const liveBetPage = document.getElementById('live-bet');
+
+        if (periodPage && periodPage.classList.contains('active')) {
+            loadPeriodTable(true);
+        } else if (liveBetPage && liveBetPage.classList.contains('active')) {
+            loadLiveBetAndHistory();
+        }
+    }, 60000);
 }
 
 // ==========================================
@@ -44,7 +75,7 @@ function switchTab(tabId) {
     } else if (tabId === 'registration') {
         loadRegistrationTable();
     } else if (tabId === 'period') {
-        loadPeriodTable();
+        loadPeriodTable(false);
     } else if (tabId === 'transaction') {
         loadTransactionTable();
     } else if (tabId === 'report') {
@@ -85,6 +116,7 @@ async function loadLiveBetAndHistory() {
             document.getElementById('active-period-title').textContent =
                 `PERIOD: ${periodRes.period.name} (${periodRes.period.date})`;
         } else {
+            activePeriodName = '';
             document.getElementById('active-period-title').textContent = 'PERIOD: Tidak ada periode aktif';
         }
 
@@ -259,16 +291,20 @@ async function submitEditPlayer(event) {
 }
 
 // ==========================================
-// MENU 2: PERIOD (Sheet PERIOD Kolom A - E)
+// MENU 2: PERIOD (Sheet PERIOD Kolom A - E, Auto-Sync GMT+9)
 // ==========================================
-async function loadPeriodTable() {
+async function loadPeriodTable(silent = false) {
     const tbody = document.querySelector('#table-period tbody');
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Loading data...</td></tr>';
+    if (!silent) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Loading data...</td></tr>';
+    }
 
     try {
         const res = await postToScript({ action: 'get_all_periods' });
         if (res.status !== 'success') {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">${escapeHtml(res.message || 'Gagal memuat data')}</td></tr>`;
+            if (!silent) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">${escapeHtml(res.message || 'Gagal memuat data')}</td></tr>`;
+            }
             return;
         }
 
@@ -288,7 +324,9 @@ async function loadPeriodTable() {
             </tr>
         `).join('');
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:red;">Terjadi kesalahan koneksi.</td></tr>';
+        if (!silent) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:red;">Terjadi kesalahan koneksi.</td></tr>';
+        }
         console.error(err);
     }
 }
@@ -314,9 +352,7 @@ function updateAutoPeriodStatus() {
     if (startVal && startVal.length === 5) startVal += ':00';
     if (endVal && endVal.length === 5) endVal += ':00';
 
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const { dateStr: todayStr, timeStr: nowTimeStr } = getNowGMT9();
 
     let status = 'inactive';
     if (dateVal > todayStr) {
@@ -356,7 +392,7 @@ async function submitAddPeriod(event) {
 
         if (res.status === 'success') {
             closeModal('modal-add-period');
-            loadPeriodTable();
+            loadPeriodTable(false);
         } else {
             alert('Gagal menambah periode: ' + (res.message || 'Unknown error'));
         }
